@@ -24,7 +24,7 @@ import * as urllib from 'url';
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
 import { JSDOM } from 'jsdom';
-import { Remarkable } from 'remarkable';
+import TurndownService from 'turndown';
 
 /**
  * Type alias for a note object.
@@ -124,14 +124,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: "fetch_url_puppeteer",
-        description: "Fetch content from a URL using Puppeteer and convert to markdown",
+        name: "fetch_url",
+        description: "Fetch content from a URL. Supports optional use of Puppeteer with custom flags.",
         inputSchema: {
           type: "object",
           properties: {
             url: {
               type: "string",
-              description: "URL to fetch"
+              description: "The URL to fetch content from"
+            },
+            usePuppeteer: {
+              type: "boolean",
+              description: "Whether to use Puppeteer to fetch the URL (default: true)",
+              default: true
+            },
+            puppeteerFlags: {
+              type: "string",
+              description: "Custom flags to pass to Puppeteer (optional)"
+            },
+            puppeteerHeadless: {
+              type: "boolean",
+              description: "Whether to run Puppeteer in headless mode (default: false)",
+              default: false
+            },
+            raw: {
+              type: "boolean",
+              description: "Whether to return the raw content without converting to Markdown (default: false)",
+              default: false
             }
           },
           required: ["url"]
@@ -183,39 +202,82 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }]
       };
     }
-    case "fetch_url_puppeteer": {
+    case "fetch_url": {
         const url = String(request.params.arguments?.url);
+        const usePuppeteer = request.params.arguments?.usePuppeteer === undefined ? true : request.params.arguments?.usePuppeteer;
+        const puppeteerFlags = String(request.params.arguments?.puppeteerFlags || '');
+        const puppeteerHeadless = request.params.arguments?.puppeteerHeadless === undefined ? false : request.params.arguments?.puppeteerHeadless;
+        const raw = request.params.arguments?.raw === undefined ? false : request.params.arguments?.raw;
+        
         if (!url) {
-            throw new Error("URL is required");
+          throw new Error("URL is required");
         }
-        try {
-            const browser = await puppeteer.launch({ headless: true });
+    
+        const turndownService = new TurndownService();
+        if (usePuppeteer) {
+          try {
+            const launchOptions: any = { headless: puppeteerHeadless };
+            if (puppeteerFlags) {
+              launchOptions.args = [...(launchOptions.args || []), ...puppeteerFlags.split(' ')];
+            }
+    
+            const browser = await puppeteer.launch(launchOptions);
             const page = await browser.newPage();
-            await page.goto(url, { waitUntil: 'domcontentloaded' });
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             const html = await page.content();
             await browser.close();
-
-            const dom = new JSDOM(html);
-            const document = dom.window.document;
-            const md = new Remarkable();
-            const markdown = md.render(document.body.innerHTML);
-
-            return {
+    
+            if (raw) {
+              return {
                 content: [{
-                    type: "text",
-                    text: markdown
+                  type: "text",
+                  text: html
                 }]
-            };
-        } catch (error: any) {
-            return {
+              };
+            } else {
+              const markdown = turndownService.turndown(html);
+              return {
                 content: [{
-                    type: "text",
-                    text: `Error fetching URL: ${error.message}`
-                }],
-                isError: true
-            };
+                  type: "text",
+                  text: markdown
+                }]
+              };
+            }
+          } catch (error: any) {
+            console.error(`Puppeteer error: ${error.message}`);
+            // Fallback to axios is handled below
+          }
         }
-    }
+    
+        // Fallback to axios if usePuppeteer is false or if Puppeteer fails
+        try {
+          const response = await axios.get(url);
+          if (raw) {
+            return {
+              content: [{
+                type: "text",
+                text: response.data
+              }]
+            };
+          } else {
+            const markdown = turndownService.turndown(response.data);
+            return {
+              content: [{
+                type: "text",
+                text: markdown
+              }]
+            };
+          }
+        } catch (axiosError: any) {
+          return {
+            content: [{
+              type: "text",
+              text: `Error fetching URL: ${usePuppeteer ? 'Puppeteer error (see above), ' : ''}Axios fallback error: ${axiosError.message}`
+            }],
+            isError: true
+          };
+        }
+      }
     case "duckduckgo_search": {
         const query = String(request.params.arguments?.query);
         const numResults = Number(request.params.arguments?.num_results) || 5;
@@ -341,7 +403,7 @@ async function main() {
     console.log("Server started");
 }
 
-main().catch((error) => {
+main().catch((error: any) => {
   console.error("Server error:", error);
   process.exit(1);
 });

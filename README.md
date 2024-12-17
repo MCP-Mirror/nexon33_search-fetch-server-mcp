@@ -19,9 +19,10 @@ This is a TypeScript-based MCP server that implements a simple notes system. It 
 - `create_note` - Create new text notes
   - Takes title and content as required parameters
   - Stores note in server state
-- `fetch_url_puppeteer` - Fetch content from a URL using Puppeteer and convert to markdown
+- `fetch_url` - Fetch content from a URL and optionally convert to markdown using Puppeteer
   - Takes a URL as a required parameter
-  - Returns the content of the URL as markdown
+  - Takes an optional `use_puppeteer` boolean parameter. If true, it will use puppeteer with `waitUntil` set to `networkidle2` and a timeout of 30 seconds. Otherwise, it will use axios.
+  - Returns the content of the URL as markdown if using puppeteer, otherwise returns the content as is.
 - `duckduckgo_search` - Perform a DuckDuckGo search
   - Takes a query as a required parameter
   - Returns search results as a JSON string

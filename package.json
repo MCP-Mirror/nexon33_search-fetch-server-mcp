@@ -12,7 +12,7 @@
     "test"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/src/index.js', '755')\"",
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
@@ -28,7 +28,8 @@
     "jsdom": "^25.0.1",
     "puppeteer": "^23.10.4",
     "remarkable": "^2.0.1",
-    "ts-jest": "^29.2.5"
+    "ts-jest": "^29.2.5",
+    "turndown": "^7.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
@@ -37,6 +38,7 @@
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.11.24",
     "@types/remarkable": "^2.0.8",
+    "@types/turndown": "^5.0.5",
     "babel-jest": "^29.7.0",
     "jest-environment-node-single-context-esm": "^26.5.2",
     "typescript": "^5.3.3"
